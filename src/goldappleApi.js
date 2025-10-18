@@ -6,6 +6,32 @@
 const DEFAULT_CITY_ID = '0c5b2444-70a0-4932-980c-b4dc0d3f02b5'; // Moscow
 
 /**
+ * Fetches fresh cookies from GoldApple website
+ * @returns {Promise<string>} Cookie string
+ */
+async function getFreshCookies() {
+  try {
+    const response = await fetch('https://goldapple.ru/', {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+
+    const cookies = response.headers.get('set-cookie');
+    if (cookies) {
+      // Parse and return cookies
+      return cookies.split(',').map(cookie => cookie.split(';')[0]).join('; ');
+    }
+
+    return '';
+  } catch (error) {
+    console.error('Error fetching fresh cookies:', error);
+    return '';
+  }
+}
+
+/**
  * Fetches products from GoldApple catalog
  * @param {number} categoryId - Category ID
  * @param {number} pageNumber - Page number (default: 1)
@@ -13,7 +39,7 @@ const DEFAULT_CITY_ID = '0c5b2444-70a0-4932-980c-b4dc0d3f02b5'; // Moscow
  * @param {string} cityId - City ID (default: Moscow)
  * @returns {Promise<Object>} Product data
  */
-export async function fetchProducts(categoryId, pageNumber = 1, pageSize = 24, cityId = DEFAULT_CITY_ID) {
+export async function fetchProducts(categoryId, pageNumber = 1, pageSize = 24, cityId = DEFAULT_CITY_ID, retryWithFreshCookies = true) {
   const url = 'https://goldapple.ru/front/api/catalog/cards-list?locale=ru';
 
   const payload = {
@@ -28,6 +54,8 @@ export async function fetchProducts(categoryId, pageNumber = 1, pageSize = 24, c
     regionId: cityId
   };
 
+  const defaultCookies = "ga-lang=ru; ga-device-id=rYMiFCxukCxdcxZNjBku8; digi-analytics-sessionId=V8fdlf9aRYlYtZhN5YYjE; _sp_ses.925f=*; advcake_track_id=0ddb83f9-838d-abfb-9fad-ce25195d0419; advcake_session_id=cafe08e9-65ff-7aab-5455-9d185b4fec3f; __zzatw-goldapple-ru=MDA0dBA=Fz2+aQ==; _ym_uid=1760728358427797155; _ym_d=1760728358; _ym_isad=1; mindboxDeviceUUID=2131991c-e2a5-4086-b28b-0381a743b154; directCrm-session=%7B%22deviceGuid%22%3A%222131991c-e2a5-4086-b28b-0381a743b154%22%7D; _ym_visorc=b; ga-session-assets=1760728377.16.78814.767251|35ea8fadbee41dc5f5431a69d8c9f4c4; advcake_track_url=%3D20250113fg0N0A1A1LHsAwbKJYnbt28hz8pbJUkacvbmWwj2X50QjNOQIVlwDZAf2O%2B8IT6VDXaAe7g2BKpraCaHUg6NE%2BS0G%2BWv6xOTk2FNdlIY%2FEQcCQmUSDXdXcxvN379swSSA7qBmSdxw6duR%2B1KUMSQ%2BXGNdIgAuLGyYlFX1dgEz7ToZFhqgt5LQkOyi6sqeEIHR%2BbGAav11DHUcFcGBP9kPWXHufJAl1VBgKkwrAlkvdl8jNxFxLFG6hEcwX1B8izYBCuVr7IeDn7z3%2FeB68z7X3KQY2zDMnpbdAAegMg1YrP5wFyZiSXEIt2PaBsU6C23QCCTPUj3F%2BPDr5Jqlf8pDPEU10JRGAWVQo1iBgLz5NWZqhN%2FnEa76dQqhl2Uk3X2zGDYHwtE7nArx58QMoVcRgYPKE5K8lNO6t%2BlIH6o%2FvUluqsCcuh%2F0Tns7tHT5fnbUgJ6YxG4IYGYrBpBYfnbGRQTzyJnqtwVMKfSfWKQTI2d5jrJjczAu52h8%2F3oQqfsIGwJYn4G6gcRnkUkPS1127sSt1oClSf%2Bjc1CBTXmuek29skk9XHPmp7iN2jLIR6gtgsTmGufuDpLs4wtYiglcKKvXC7rPOIbSgmufOJ2Su8yw7jeS4oS7tV89e%2BSf5P0JEa2smcPUkNy894OH%2BwyD%2BPFb7FjS2Sd9YivsH71Md2zoaHCC4Z%2F1fI%3D; _gcl_au=1.1.1857235493.1760728386; _ga=GA1.1.1765942761.1760728386; isAddressConfirmed=true; _ga_QE5MQ8XJJK=GS2.1.s1760728385$o1$g1$t1760728481$j24$l0$h0; _sp_id.925f=caea615d-00ac-47b1-a856-80502a0b9dc0.1760728357.1.1760728481..b5db8335-21bb-4b49-a6c8-b5eccf2a37e8..2f1f15a8-8344-4dac-9b58-4c2746e0515a.1760728357591.45; ngx_s_id=OTgxNzE0MGItZmExMS00ZTA4LTgyMGEtNjY5MThkODM4NzUyQDE3NjA3Mjk2ODIzMTBAOTAwMDAwQDE3NjA3MjgzNTUxMzJAYzRhZDUxYWE1N2Y4MzFmYmMwYTUwMTBhYjAzN2NmNzI0OGM2YTE3NWZjMTNkM2ExZTI4ZDA2YmVjZjliOThlYg==; gsscw-goldapple-ru=eLKq2AeWlG96Rkg+3BrtTLHxXIgt/NFiprs8CBMjTw55ZlWn1kZN7aKJJslVqt01BJTScTPF5uCrw4XLOHQ1lrsQ1ZzYXBO6caQ0tZnLkjrJywdrAcd0ELD26KbDTBuFiSrVvnz2GCLOsiFiTjwN53YEjYuJJ0GHbkCIJEHYiLsXJrkeC4NDJaDP7cd6qxud6xrt0Rasrm8jlArFU9apXabxqzt/Ot6BKInHNfui/6qhCcFfUZKxct7E+jGzj9A6lux223vIPUDekA==; cfidsw-goldapple-ru=OpXPbi0atjW24U3MQ0QC0gsSQgrd5Tu36HQN/ooJopR3OSAd5jmZWN2omgnprkS1j8I8npKWFTyYAxlOxNQpyGL4GazPs60IEO79klO0vUFNM0oW6eyETAj20NmBplMx/c9eJk3Dt8xYhjcyRYJROwzamKyjrnHfsIXDTg==; cfidsw-goldapple-ru=OpXPbi0atjW24U3MQ0QC0gsSQgrd5Tu36HQN/ooJopR3OSAd5jmZWN2omgnprkS1j8I8npKWFTyYAxlOxNQpyGL4GazPs60IEO79klO0vUFNM0oW6eyETAj20NmBplMx/c9eJk3Dt8xYhjcyRYJROwzamKyjrnHfsIXDTg==; gsscw-goldapple-ru=eLKq2AeWlG96Rkg+3BrtTLHxXIgt/NFiprs8CBMjTw55ZlWn1kZN7aKJJslVqt01BJTScTPF5uCrw4XLOHQ1lrsQ1ZzYXBO6caQ0tZnLkjrJywdrAcd0ELD26KbDTBuFiSrVvnz2GCLOsiFiTjwN53YEjYuJJ0GHbkCIJEHYiLsXJrkeC4NDJaDP7cd6qxud6xrt0Rasrm8jlArFU9apXabxqzt/Ot6BKInHNfui/6qhCcFfUZKxct7E+jGzj9A6lux223vIPUDekA==; fgsscw-goldapple-ru=KKr7865f5700a6510e0e6502feb39cfaaf503ade";
+
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -36,11 +64,40 @@ export async function fetchProducts(categoryId, pageNumber = 1, pageSize = 24, c
         'accept-language': 'en-US,en;q=0.9,ru;q=0.8',
         'cache-control': 'no-cache',
         'content-type': 'application/json',
-        "cookie": "ga-lang=ru; ga-device-id=rYMiFCxukCxdcxZNjBku8; digi-analytics-sessionId=V8fdlf9aRYlYtZhN5YYjE; _sp_ses.925f=*; advcake_track_id=0ddb83f9-838d-abfb-9fad-ce25195d0419; advcake_session_id=cafe08e9-65ff-7aab-5455-9d185b4fec3f; __zzatw-goldapple-ru=MDA0dBA=Fz2+aQ==; _ym_uid=1760728358427797155; _ym_d=1760728358; _ym_isad=1; mindboxDeviceUUID=2131991c-e2a5-4086-b28b-0381a743b154; directCrm-session=%7B%22deviceGuid%22%3A%222131991c-e2a5-4086-b28b-0381a743b154%22%7D; _ym_visorc=b; ga-session-assets=1760728377.16.78814.767251|35ea8fadbee41dc5f5431a69d8c9f4c4; advcake_track_url=%3D20250113fg0N0A1A1LHsAwbKJYnbt28hz8pbJUkacvbmWwj2X50QjNOQIVlwDZAf2O%2B8IT6VDXaAe7g2BKpraCaHUg6NE%2BS0G%2BWv6xOTk2FNdlIY%2FEQcCQmUSDXdXcxvN379swSSA7qBmSdxw6duR%2B1KUMSQ%2BXGNdIgAuLGyYlFX1dgEz7ToZFhqgt5LQkOyi6sqeEIHR%2BbGAav11DHUcFcGBP9kPWXHufJAl1VBgKkwrAlkvdl8jNxFxLFG6hEcwX1B8izYBCuVr7IeDn7z3%2FeB68z7X3KQY2zDMnpbdAAegMg1YrP5wFyZiSXEIt2PaBsU6C23QCCTPUj3F%2BPDr5Jqlf8pDPEU10JRGAWVQo1iBgLz5NWZqhN%2FnEa76dQqhl2Uk3X2zGDYHwtE7nArx58QMoVcRgYPKE5K8lNO6t%2BlIH6o%2FvUluqsCcuh%2F0Tns7tHT5fnbUgJ6YxG4IYGYrBpBYfnbGRQTzyJnqtwVMKfSfWKQTI2d5jrJjczAu52h8%2F3oQqfsIGwJYn4G6gcRnkUkPS1127sSt1oClSf%2Bjc1CBTXmuek29skk9XHPmp7iN2jLIR6gtgsTmGufuDpLs4wtYiglcKKvXC7rPOIbSgmufOJ2Su8yw7jeS4oS7tV89e%2BSf5P0JEa2smcPUkNy894OH%2BwyD%2BPFb7FjS2Sd9YivsH71Md2zoaHCC4Z%2F1fI%3D; _gcl_au=1.1.1857235493.1760728386; _ga=GA1.1.1765942761.1760728386; isAddressConfirmed=true; _ga_QE5MQ8XJJK=GS2.1.s1760728385$o1$g1$t1760728481$j24$l0$h0; _sp_id.925f=caea615d-00ac-47b1-a856-80502a0b9dc0.1760728357.1.1760728481..b5db8335-21bb-4b49-a6c8-b5eccf2a37e8..2f1f15a8-8344-4dac-9b58-4c2746e0515a.1760728357591.45; ngx_s_id=OTgxNzE0MGItZmExMS00ZTA4LTgyMGEtNjY5MThkODM4NzUyQDE3NjA3Mjk2ODIzMTBAOTAwMDAwQDE3NjA3MjgzNTUxMzJAYzRhZDUxYWE1N2Y4MzFmYmMwYTUwMTBhYjAzN2NmNzI0OGM2YTE3NWZjMTNkM2ExZTI4ZDA2YmVjZjliOThlYg==; gsscw-goldapple-ru=eLKq2AeWlG96Rkg+3BrtTLHxXIgt/NFiprs8CBMjTw55ZlWn1kZN7aKJJslVqt01BJTScTPF5uCrw4XLOHQ1lrsQ1ZzYXBO6caQ0tZnLkjrJywdrAcd0ELD26KbDTBuFiSrVvnz2GCLOsiFiTjwN53YEjYuJJ0GHbkCIJEHYiLsXJrkeC4NDJaDP7cd6qxud6xrt0Rasrm8jlArFU9apXabxqzt/Ot6BKInHNfui/6qhCcFfUZKxct7E+jGzj9A6lux223vIPUDekA==; cfidsw-goldapple-ru=OpXPbi0atjW24U3MQ0QC0gsSQgrd5Tu36HQN/ooJopR3OSAd5jmZWN2omgnprkS1j8I8npKWFTyYAxlOxNQpyGL4GazPs60IEO79klO0vUFNM0oW6eyETAj20NmBplMx/c9eJk3Dt8xYhjcyRYJROwzamKyjrnHfsIXDTg==; cfidsw-goldapple-ru=OpXPbi0atjW24U3MQ0QC0gsSQgrd5Tu36HQN/ooJopR3OSAd5jmZWN2omgnprkS1j8I8npKWFTyYAxlOxNQpyGL4GazPs60IEO79klO0vUFNM0oW6eyETAj20NmBplMx/c9eJk3Dt8xYhjcyRYJROwzamKyjrnHfsIXDTg==; gsscw-goldapple-ru=eLKq2AeWlG96Rkg+3BrtTLHxXIgt/NFiprs8CBMjTw55ZlWn1kZN7aKJJslVqt01BJTScTPF5uCrw4XLOHQ1lrsQ1ZzYXBO6caQ0tZnLkjrJywdrAcd0ELD26KbDTBuFiSrVvnz2GCLOsiFiTjwN53YEjYuJJ0GHbkCIJEHYiLsXJrkeC4NDJaDP7cd6qxud6xrt0Rasrm8jlArFU9apXabxqzt/Ot6BKInHNfui/6qhCcFfUZKxct7E+jGzj9A6lux223vIPUDekA==; fgsscw-goldapple-ru=KKr7865f5700a6510e0e6502feb39cfaaf503ade",
-        "Referer": "https://goldapple.ru/brands/flacon-magazine"
+        'cookie': defaultCookies,
+        'Referer': 'https://goldapple.ru/brands/flacon-magazine'
       },
       body: JSON.stringify(payload)
     });
+
+    // If 403 error and retry is enabled, try with fresh cookies
+    if (response.status === 403 && retryWithFreshCookies) {
+      console.log('Got 403 error, fetching fresh cookies...');
+      const freshCookies = await getFreshCookies();
+
+      if (freshCookies) {
+        console.log('Retrying request with fresh cookies...');
+        const retryResponse = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'accept': 'application/json, text/plain, */*',
+            'accept-language': 'en-US,en;q=0.9,ru;q=0.8',
+            'cache-control': 'no-cache',
+            'content-type': 'application/json',
+            'cookie': freshCookies,
+            'Referer': 'https://goldapple.ru/brands/flacon-magazine'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!retryResponse.ok) {
+          throw new Error(`HTTP error! status: ${retryResponse.status}`);
+        }
+
+        const data = await retryResponse.json();
+        return data;
+      }
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -57,9 +114,10 @@ export async function fetchProducts(categoryId, pageNumber = 1, pageSize = 24, c
 /**
  * Fetches a single product by itemId
  * @param {string} itemId - Product item ID
+ * @param {boolean} retryWithFreshCookies - Whether to retry with fresh cookies on 403
  * @returns {Promise<Object>} Product details
  */
-export async function fetchProductById(itemId) {
+export async function fetchProductById(itemId, retryWithFreshCookies = true) {
   const url = `https://goldapple.ru/front/api/catalog/product/${itemId}?locale=ru`;
 
   try {
@@ -71,6 +129,32 @@ export async function fetchProductById(itemId) {
         'cache-control': 'no-cache'
       }
     });
+
+    // If 403 error and retry is enabled, try with fresh cookies
+    if (response.status === 403 && retryWithFreshCookies) {
+      console.log('Got 403 error, fetching fresh cookies...');
+      const freshCookies = await getFreshCookies();
+
+      if (freshCookies) {
+        console.log('Retrying request with fresh cookies...');
+        const retryResponse = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'accept': 'application/json, text/plain, */*',
+            'accept-language': 'en-US,en;q=0.9,ru;q=0.8',
+            'cache-control': 'no-cache',
+            'cookie': freshCookies
+          }
+        });
+
+        if (!retryResponse.ok) {
+          throw new Error(`HTTP error! status: ${retryResponse.status}`);
+        }
+
+        const data = await retryResponse.json();
+        return data;
+      }
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
