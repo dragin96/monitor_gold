@@ -42,7 +42,7 @@ async function saveSubscriptions(subscriptions) {
 /**
  * Add a category subscription for a user
  * @param {number} chatId - Telegram chat ID
- * @param {number} categoryId - Category ID
+ * @param {number|string} categoryId - Category ID (numeric or text key)
  * @param {Object} categoryInfo - Category information
  */
 export async function addCategorySubscription(chatId, categoryId, categoryInfo) {
@@ -54,6 +54,7 @@ export async function addCategorySubscription(chatId, categoryId, categoryInfo) 
 
   subscriptions[chatId][categoryId] = {
     type: 'category',
+    categoryKey: typeof categoryId === 'string' ? categoryId : null, // Text key or null
     ...categoryInfo,
     subscribedAt: new Date().toISOString(),
     lastChecked: null,

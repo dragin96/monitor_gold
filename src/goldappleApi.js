@@ -3,27 +3,26 @@
  * Handles all API requests to GoldApple website
  */
 
+import { fetchCookiesWithBrowser } from './browserManager.js';
+import { fetchProductsWithBrowser } from './goldappleApiBrowser.js';
+
 const DEFAULT_CITY_ID = '0c5b2444-70a0-4932-980c-b4dc0d3f02b5'; // Moscow
 
 /**
- * Fetches fresh cookies from GoldApple website
+ * Fetches fresh cookies from GoldApple website using browser
  * @returns {Promise<string>} Cookie string
  */
 async function getFreshCookies() {
   try {
-    const response = await fetch('https://goldapple.ru/', {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
-    });
+    console.log('Fetching fresh cookies using browser...');
+    const cookies = await fetchCookiesWithBrowser();
 
-    const cookies = response.headers.get('set-cookie');
     if (cookies) {
-      // Parse and return cookies
-      return cookies.split(',').map(cookie => cookie.split(';')[0]).join('; ');
+      console.log('Successfully fetched cookies from browser');
+      return cookies;
     }
 
+    console.warn('No cookies fetched from browser');
     return '';
   } catch (error) {
     console.error('Error fetching fresh cookies:', error);
@@ -70,32 +69,15 @@ export async function fetchProducts(categoryId, pageNumber = 1, pageSize = 24, c
       body: JSON.stringify(payload)
     });
 
-    // If 403 error and retry is enabled, try with fresh cookies
+    // If 403 error and retry is enabled, use browser-based approach
     if (response.status === 403 && retryWithFreshCookies) {
-      console.log('Got 403 error, fetching fresh cookies...');
-      const freshCookies = await getFreshCookies();
-
-      if (freshCookies) {
-        console.log('Retrying request with fresh cookies...');
-        const retryResponse = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'accept': 'application/json, text/plain, */*',
-            'accept-language': 'en-US,en;q=0.9,ru;q=0.8',
-            'cache-control': 'no-cache',
-            'content-type': 'application/json',
-            'cookie': freshCookies,
-            'Referer': 'https://goldapple.ru/brands/flacon-magazine'
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (!retryResponse.ok) {
-          throw new Error(`HTTP error! status: ${retryResponse.status}`);
-        }
-
-        const data = await retryResponse.json();
+      console.log('Got 403 error, switching to browser-based fetch...');
+      try {
+        const data = await fetchProductsWithBrowser(categoryId, pageNumber, pageSize, cityId);
         return data;
+      } catch (browserError) {
+        console.error('Browser-based fetch also failed:', browserError.message);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
     }
 

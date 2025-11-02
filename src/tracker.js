@@ -1,11 +1,13 @@
 /**
  * Category Tracker
  * Periodically checks category product counts and sends notifications
+ * Supports both numeric IDs and text keys
  */
 
 import cron from 'node-cron';
 import { getAllSubscriptions, updateSubscription } from './database.js';
 import { getCategoryInfo } from './goldappleApi.js';
+import { fetchCategoryProductCount } from './categoryTracker.js';
 
 export class CategoryTracker {
   constructor(bot) {
@@ -62,7 +64,13 @@ export class CategoryTracker {
         for (const categoryId of categoryIds) {
           const subscription = userSubscriptions[categoryId];
           if (subscription.type === 'category') {
-            await this.checkCategory(parseInt(chatId), parseInt(categoryId), subscription);
+            // Check if it's a text key or numeric ID
+            const isTextKey = subscription.categoryKey !== null && subscription.categoryKey !== undefined;
+            if (isTextKey) {
+              await this.checkCategoryByKey(parseInt(chatId), categoryId, subscription);
+            } else {
+              await this.checkCategory(parseInt(chatId), parseInt(categoryId), subscription);
+            }
           }
         }
       }
@@ -111,6 +119,50 @@ export class CategoryTracker {
       }
     } catch (error) {
       console.error(`Error checking category ${categoryId} for user ${chatId}:`, error);
+    }
+  }
+
+  /**
+   * Check single category by text key (browser-based)
+   * @param {number} chatId - Chat ID
+   * @param {string} categoryKey - Category text key
+   * @param {Object} subscription - Subscription data
+   */
+  async checkCategoryByKey(chatId, categoryKey, subscription) {
+    try {
+      const freshData = await fetchCategoryProductCount(categoryKey);
+      const currentCount = freshData.productCount;
+      const previousCount = subscription.lastProductCount;
+
+      if (currentCount !== previousCount) {
+        const diff = currentCount - previousCount;
+        console.log(`📊 Category ${categoryKey} changed: ${previousCount} → ${currentCount} (${diff > 0 ? '+' : ''}${diff})`);
+
+        // Send notification about the change
+        await this.bot.sendCategoryChangeNotification(chatId, {
+          categoryId: categoryKey,
+          categoryUrl: subscription.categoryUrl || '',
+          previousCount,
+          currentCount,
+          diff
+        });
+
+        // Update subscription with new count
+        await updateSubscription(chatId, categoryKey, {
+          lastProductCount: currentCount,
+          productCount: currentCount
+        });
+      } else {
+        // Just update last checked time
+        await updateSubscription(chatId, categoryKey, {
+          lastProductCount: currentCount
+        });
+      }
+
+      // Add delay to avoid being blocked
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 3000 + 2000));
+    } catch (error) {
+      console.error(`Error checking category ${categoryKey} for user ${chatId}:`, error);
     }
   }
 

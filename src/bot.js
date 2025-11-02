@@ -1,5 +1,6 @@
 /**
  * Telegram Bot Handler
+ * Supports both numeric categoryId and text category keys
  */
 
 import TelegramBot from 'node-telegram-bot-api';
@@ -10,6 +11,8 @@ import {
   isSubscribed
 } from './database.js';
 import { getCategoryInfo } from './goldappleApi.js';
+import { handleCheckCommand } from './bot-test.js';
+import { getCategoryInfo as getCategoryInfoByKey, getAllCategoryKeys } from './categoryTracker.js';
 
 export class GoldAppleBot {
   constructor(token) {
@@ -27,13 +30,17 @@ export class GoldAppleBot {
 Этот бот поможет вам отслеживать изменения количества товаров в категориях на goldapple.ru
 
 📌 Доступные команды:
+/check <category> - Проверить категорию (по ключу или ID)
+/categories - Показать доступные категории
 /track <categoryId> - Отслеживать категорию по ID
 /list - Показать все отслеживаемые категории
 /remove <categoryId> - Удалить категорию из отслеживания
-/check <categoryId> - Проверить количество товаров в категории
 /help - Показать справку
 
-💡 Пример: /track 1000001798
+💡 Примеры:
+/check flacon-magazine
+/check 1000001798
+/categories
       `;
       this.bot.sendMessage(chatId, welcomeMessage);
     });
@@ -44,55 +51,60 @@ export class GoldAppleBot {
       const helpMessage = `
 📖 Как использовать бота:
 
-1️⃣ Откройте категорию/бренд на goldapple.ru
-2️⃣ Найдите categoryId в запросе (в DevTools → Network)
-3️⃣ Отправьте команду: /track 1000001798
-4️⃣ Бот будет проверять количество товаров каждые 5 минут
-5️⃣ Вы получите уведомление, когда количество изменится
+🔹 Два способа проверки категорий:
 
-🔍 Как найти categoryId:
-1. Откройте раздел на goldapple.ru (например, /brands/flacon-magazine)
-2. Откройте DevTools (F12) → вкладка Network
-3. Найдите запрос к /front/api/catalog/cards-list
-4. В теле запроса найдите "categoryId": 1000001798
+1️⃣ По текстовому ключу (новый способ):
+   • Используйте /categories чтобы увидеть доступные категории
+   • Пример: /check flacon-magazine
 
-⚙️ Команды:
-/track <categoryId> - Отслеживать категорию
+2️⃣ По числовому ID (старый способ):
+   • Найдите categoryId в DevTools → Network
+   • Запрос: /front/api/catalog/cards-list
+   • Пример: /track 1000001798
+
+⚙️ Основные команды:
+
+/check <category> - Проверить категорию (ключ или ID)
+  Примеры:
+  • /check flacon-magazine
+  • /check 1000001798
+
+/categories - Показать все доступные категории
+
+/track <categoryId> - Добавить отслеживание по ID
 /list - Список отслеживаемых категорий
 /remove <categoryId> - Удалить из отслеживания
-/check <categoryId> - Проверить количество сейчас
 
-💡 Пример categoryId для бренда Flacon Magazine: 1000001798
+💡 Рекомендуем использовать текстовые ключи - они проще!
       `;
       this.bot.sendMessage(chatId, helpMessage);
     });
 
-    // Track command
+    // Track command - supports both numeric ID and text keys
     this.bot.onText(/\/track (.+)/, async (msg, match) => {
       const chatId = msg.chat.id;
-      const categoryId = parseInt(match[1].trim());
-
-      if (isNaN(categoryId)) {
-        this.bot.sendMessage(chatId, '❌ Неверный формат ID категории. Используйте число, например: /track 1000001798');
-        return;
-      }
+      const input = match[1].trim();
 
       try {
-        // Check if already subscribed
-        if (await isSubscribed(chatId, categoryId)) {
-          this.bot.sendMessage(chatId, '⚠️ Вы уже отслеживаете эту категорию.');
-          return;
-        }
-
         this.bot.sendMessage(chatId, '🔍 Проверяю категорию...');
 
-        // Fetch category info
-        const categoryInfo = await getCategoryInfo(categoryId);
+        // Try to parse as number first (old format)
+        const categoryId = parseInt(input);
 
-        // Add subscription
-        await addCategorySubscription(chatId, categoryId, categoryInfo);
+        if (!isNaN(categoryId)) {
+          // Numeric ID - use old tracking system
+          if (await isSubscribed(chatId, categoryId)) {
+            this.bot.sendMessage(chatId, '⚠️ Вы уже отслеживаете эту категорию.');
+            return;
+          }
 
-        const message = `
+          // Fetch category info
+          const categoryInfo = await getCategoryInfo(categoryId);
+
+          // Add subscription
+          await addCategorySubscription(chatId, categoryId, categoryInfo);
+
+          const message = `
 ✅ Категория добавлена в отслеживание!
 
 🆔 Category ID: ${categoryInfo.categoryId}
@@ -100,14 +112,63 @@ export class GoldAppleBot {
 🔗 https://goldapple.ru${categoryInfo.url || ''}
 
 ⏳ Я буду проверять изменения каждые 5 минут и уведомлю вас, когда количество товаров изменится.
-        `;
+          `;
 
-        this.bot.sendMessage(chatId, message);
+          this.bot.sendMessage(chatId, message);
+        } else {
+          // Text key - use browser-based tracking
+          const categoryKey = input;
+          const categoryInfo = getCategoryInfoByKey(categoryKey);
+
+          if (!categoryInfo) {
+            this.bot.sendMessage(chatId, `❌ Категория "${categoryKey}" не найдена.\n\nИспользуйте /categories для списка доступных категорий.`);
+            return;
+          }
+
+          // Check if already subscribed
+          if (await isSubscribed(chatId, categoryKey)) {
+            this.bot.sendMessage(chatId, '⚠️ Вы уже отслеживаете эту категорию.');
+            return;
+          }
+
+          // Fetch current count using browser
+          const checkResult = await handleCheckCommand(categoryKey);
+
+          // Extract count from the message (this is a simple approach)
+          // The message format is: "📊 CategoryName: Без изменений (X товаров)"
+          // or "📈/📉 CategoryName: ..."
+
+          // For now, fetch fresh data
+          const { fetchCategoryProductCount } = await import('./categoryTracker.js');
+          const freshData = await fetchCategoryProductCount(categoryKey);
+
+          // Add subscription with text key
+          await addCategorySubscription(chatId, categoryKey, {
+            categoryName: categoryInfo.name,
+            categoryUrl: categoryInfo.url,
+            productCount: freshData.productCount
+          });
+
+          const message = `
+✅ Категория добавлена в отслеживание!
+
+📝 Ключ: ${categoryKey}
+📂 Название: ${categoryInfo.name}
+📊 Текущее количество: ${freshData.productCount} товаров
+🔗 ${categoryInfo.url}
+
+⏳ Я буду проверять изменения каждые 5 минут и уведомлю вас, когда количество товаров изменится.
+
+💡 Используется браузерная автоматизация для обхода защиты.
+          `;
+
+          this.bot.sendMessage(chatId, message);
+        }
       } catch (error) {
         console.error('Error tracking category:', error);
         this.bot.sendMessage(
           chatId,
-          '❌ Ошибка при добавлении категории. Проверьте правильность ID категории.'
+          '❌ Ошибка при добавлении категории. Проверьте правильность ID или ключа категории.'
         );
       }
     });
@@ -118,23 +179,40 @@ export class GoldAppleBot {
 
       try {
         const subscriptions = await getUserSubscriptions(chatId);
-        const items = Object.values(subscriptions);
+        const entries = Object.entries(subscriptions);
 
-        if (items.length === 0) {
-          this.bot.sendMessage(chatId, '📭 У вас нет отслеживаемых категорий.\n\nИспользуйте /track <categoryId> чтобы добавить категорию.');
+        if (entries.length === 0) {
+          this.bot.sendMessage(chatId, '📭 У вас нет отслеживаемых категорий.\n\nИспользуйте /track <category> для добавления (поддерживаются текстовые ключи и числовые ID).');
           return;
         }
 
         let message = '📋 Ваши отслеживаемые категории:\n\n';
 
-        items.forEach((item, index) => {
-          message += `${index + 1}. Category ID: ${item.categoryId}\n`;
+        entries.forEach(([key, item], index) => {
+          const isTextKey = item.categoryKey !== null && item.categoryKey !== undefined;
+
+          message += `${index + 1}. `;
+          if (isTextKey) {
+            message += `🔑 ${item.categoryKey}\n`;
+            message += `   📂 ${item.categoryName || 'Без названия'}\n`;
+          } else {
+            message += `🆔 ${item.categoryId || key}\n`;
+          }
+
           message += `   📊 Товаров: ${item.lastProductCount || item.productCount}\n`;
-          message += `   🔗 https://goldapple.ru${item.url || ''}\n`;
-          message += `   📅 Добавлено: ${new Date(item.subscribedAt).toLocaleString('ru-RU')}\n\n`;
+          message += `   🔗 ${item.categoryUrl || item.url || 'N/A'}\n`;
+          message += `   📅 Добавлено: ${new Date(item.subscribedAt).toLocaleString('ru-RU')}\n`;
+
+          if (isTextKey) {
+            message += `   🌐 Тип: Браузерная проверка\n`;
+          } else {
+            message += `   ⚡ Тип: API проверка\n`;
+          }
+
+          message += '\n';
         });
 
-        message += '\n💡 Используйте /remove <categoryId> чтобы удалить категорию из отслеживания.';
+        message += '💡 Используйте /remove <category> для удаления.';
 
         this.bot.sendMessage(chatId, message);
       } catch (error) {
@@ -167,35 +245,70 @@ export class GoldAppleBot {
       }
     });
 
-    // Check command
+    // Check command - supports both numeric ID and text keys
     this.bot.onText(/\/check (.+)/, async (msg, match) => {
       const chatId = msg.chat.id;
-      const categoryId = parseInt(match[1].trim());
-
-      if (isNaN(categoryId)) {
-        this.bot.sendMessage(chatId, '❌ Неверный формат ID категории.');
-        return;
-      }
+      const input = match[1].trim();
 
       try {
         this.bot.sendMessage(chatId, '🔍 Проверяю категорию...');
 
-        const categoryInfo = await getCategoryInfo(categoryId);
+        // Try to parse as number first (old format)
+        const categoryId = parseInt(input);
 
-        const message = `
+        if (!isNaN(categoryId)) {
+          // Numeric ID - use old API method
+          const categoryInfo = await getCategoryInfo(categoryId);
+
+          const message = `
 📊 Информация о категории:
 
 🆔 Category ID: ${categoryInfo.categoryId}
 📦 Количество товаров: ${categoryInfo.productCount}
 🔗 https://goldapple.ru${categoryInfo.url || ''}
 🕐 Проверено: ${new Date(categoryInfo.timestamp).toLocaleString('ru-RU')}
-        `;
+          `;
 
-        this.bot.sendMessage(chatId, message);
+          this.bot.sendMessage(chatId, message);
+        } else {
+          // Text key - use browser-based method
+          const categoryKey = input;
+
+          // Check if category exists
+          const categoryInfo = getCategoryInfoByKey(categoryKey);
+          if (!categoryInfo) {
+            this.bot.sendMessage(chatId, `❌ Категория "${categoryKey}" не найдена.\n\nИспользуйте /categories для списка доступных категорий.`);
+            return;
+          }
+
+          const message = await handleCheckCommand(categoryKey);
+          this.bot.sendMessage(chatId, message);
+        }
       } catch (error) {
         console.error('Error checking category:', error);
-        this.bot.sendMessage(chatId, '❌ Ошибка при проверке категории. Проверьте правильность ID.');
+        this.bot.sendMessage(chatId, '❌ Ошибка при проверке категории. Проверьте правильность ID или ключа категории.');
       }
+    });
+
+    // Categories command - show available text-based categories
+    this.bot.onText(/\/categories/, (msg) => {
+      const chatId = msg.chat.id;
+      const categories = getAllCategoryKeys();
+
+      if (categories.length === 0) {
+        this.bot.sendMessage(chatId, '📋 Нет доступных категорий');
+        return;
+      }
+
+      let message = '📋 Доступные категории:\n\n';
+      categories.forEach(key => {
+        const info = getCategoryInfoByKey(key);
+        message += `• ${key}\n  ${info.name}\n  ${info.url}\n\n`;
+      });
+
+      message += '\n💡 Используйте /check <category-key> для проверки категории.\nПример: /check flacon-magazine';
+
+      this.bot.sendMessage(chatId, message);
     });
   }
 
