@@ -179,7 +179,7 @@ async function getBrowser() {
 
   console.log('Launching browser for API requests...');
   browser = await puppeteer.launch({
-    headless: true,
+    headless: 'new',  // Используем новый headless режим для стабильности на сервере
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',

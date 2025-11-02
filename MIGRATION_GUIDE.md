@@ -172,7 +172,7 @@ ls src/goldappleApiBrowser.js
 **Решение:**
 ```bash
 # Переустановите Puppeteer
-npm install puppeteer
+npm install puppeteer-extra
 
 # Или установите chromium вручную (Linux)
 sudo apt-get install chromium-browser
