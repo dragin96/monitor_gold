@@ -179,7 +179,7 @@ async function getBrowser() {
 
   console.log('Launching browser for API requests...');
   browser = await puppeteer.launch({
-    headless: false, // Временно используем видимый браузер для отладки
+    headless: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
