@@ -10,8 +10,8 @@ WORKDIR /app
 # Копируем package.json и package-lock.json
 COPY package*.json ./
 
-# Устанавливаем зависимости
-RUN npm ci --only=production
+# Устанавливаем зависимости (без puppeteer, используем версию из образа)
+RUN npm ci --only=production --omit=optional
 
 # Копируем исходный код
 COPY . .
@@ -24,6 +24,10 @@ RUN chown -R pptruser:pptruser /app
 
 # Переключаемся обратно на непривилегированного пользователя
 USER pptruser
+
+# Устанавливаем переменные окружения для Puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
 # Запускаем бота
 CMD ["npm", "start"]
