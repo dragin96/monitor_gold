@@ -21,13 +21,13 @@ CHECK_INTERVAL=5
 
 ```bash
 # Сборка и запуск
-docker-compose up -d
+docker compose up -d --build
 
 # Просмотр логов
-docker-compose logs -f
+docker compose logs -f
 
 # Остановка
-docker-compose down
+docker compose down
 ```
 
 ## Ручная сборка Docker

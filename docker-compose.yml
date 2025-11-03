@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   goldapple-bot:
     build: .
@@ -12,15 +10,9 @@ services:
       # Сохраняем данные бота (подписки и история)
       - ./data:/app/data
       - ./storage:/app/storage
-    # Ограничиваем ресурсы контейнера
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '2'
-        reservations:
-          memory: 512M
-          cpus: '0.5'
+    # Ограничиваем память контейнера
+    mem_limit: 2g
+    mem_reservation: 512m
     # Логирование
     logging:
       driver: "json-file"
