@@ -13,7 +13,14 @@ const CATEGORIES = {
     name: 'Flacon Magazine',
     url: 'https://goldapple.ru/brands/flacon-magazine'
   },
-  // Add more categories here
+  'goldapplebox': {
+    name: 'goldapplebox',
+    url: 'https://goldapple.ru/brands/goldapplebox'
+  },
+  'darling': {
+    name: 'darling',
+    url: 'https://goldapple.ru/brands/darling/darling'
+  }
 };
 
 /**

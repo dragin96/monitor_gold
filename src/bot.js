@@ -33,6 +33,7 @@ export class GoldAppleBot {
 /check <category> - Проверить категорию (по ключу или ID)
 /categories - Показать доступные категории
 /track <categoryId> - Отслеживать категорию по ID
+/trackall - Подписаться на ВСЕ категории сразу
 /list - Показать все отслеживаемые категории
 /remove <categoryId> - Удалить категорию из отслеживания
 /help - Показать справку
@@ -309,6 +310,79 @@ export class GoldAppleBot {
       message += '\n💡 Используйте /check <category-key> для проверки категории.\nПример: /check flacon-magazine';
 
       this.bot.sendMessage(chatId, message);
+    });
+
+    // Track all categories command
+    this.bot.onText(/\/trackall/, async (msg) => {
+      const chatId = msg.chat.id;
+
+      try {
+        const categories = getAllCategoryKeys();
+
+        if (categories.length === 0) {
+          this.bot.sendMessage(chatId, '❌ Нет доступных категорий для отслеживания.');
+          return;
+        }
+
+        this.bot.sendMessage(chatId, `🔄 Начинаю подписку на ${categories.length} категорий...\n\nЭто может занять некоторое время.`);
+
+        const { fetchCategoryProductCount } = await import('./categoryTracker.js');
+        let successCount = 0;
+        let errorCount = 0;
+        const errors = [];
+
+        for (const categoryKey of categories) {
+          try {
+            // Check if already subscribed
+            if (await isSubscribed(chatId, categoryKey)) {
+              console.log(`Category ${categoryKey} already subscribed, skipping`);
+              successCount++; // Count as success if already subscribed
+              continue;
+            }
+
+            const categoryInfo = getCategoryInfoByKey(categoryKey);
+
+            // Fetch current count using browser
+            const freshData = await fetchCategoryProductCount(categoryKey);
+
+            // Add subscription with text key
+            await addCategorySubscription(chatId, categoryKey, {
+              categoryName: categoryInfo.name,
+              categoryUrl: categoryInfo.url,
+              productCount: freshData.productCount
+            });
+
+            successCount++;
+            console.log(`✓ Subscribed to ${categoryKey}: ${freshData.productCount} products`);
+
+            // Add delay between requests to avoid being blocked
+            await new Promise(resolve => setTimeout(resolve, Math.random() * 3000 + 2000));
+          } catch (error) {
+            errorCount++;
+            errors.push({ categoryKey, error: error.message });
+            console.error(`✗ Failed to subscribe to ${categoryKey}:`, error);
+          }
+        }
+
+        // Send summary
+        let summaryMessage = `\n✅ Подписка завершена!\n\n`;
+        summaryMessage += `📊 Успешно: ${successCount} из ${categories.length}\n`;
+
+        if (errorCount > 0) {
+          summaryMessage += `❌ Ошибок: ${errorCount}\n\n`;
+          summaryMessage += `Ошибки:\n`;
+          errors.forEach(err => {
+            summaryMessage += `• ${err.categoryKey}: ${err.error}\n`;
+          });
+        }
+
+        summaryMessage += `\n💡 Используйте /list для просмотра отслеживаемых категорий.`;
+
+        this.bot.sendMessage(chatId, summaryMessage);
+      } catch (error) {
+        console.error('Error in trackall command:', error);
+        this.bot.sendMessage(chatId, '❌ Ошибка при массовой подписке на категории.');
+      }
     });
   }
 
