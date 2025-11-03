@@ -180,10 +180,7 @@ async function getBrowser() {
   console.log('Launching browser for API requests...');
 
   // Определяем путь к Chrome в зависимости от окружения
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
-
-  browser = await puppeteer.launch({
-    executablePath,
+  let launchOptions = {
     headless: 'new',  // Используем новый headless режим для стабильности на сервере
     args: [
       '--no-sandbox',
@@ -202,7 +199,15 @@ async function getBrowser() {
       height: 1080,
       deviceScaleFactor: 1,
     }
-  });
+  };
+
+  // Добавляем executablePath только если он установлен через переменную окружения
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    console.log(`Using Chrome at: ${launchOptions.executablePath}`);
+  }
+
+  browser = await puppeteer.launch(launchOptions);
 
   return browser;
 }
