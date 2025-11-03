@@ -1,5 +1,5 @@
 # Используем официальный образ Puppeteer с предустановленным Chrome
-FROM ghcr.io/puppeteer/puppeteer:23.11.1
+FROM ghcr.io/puppeteer/puppeteer:24.27.0
 
 # Переключаемся на root для установки дополнительных пакетов
 USER root
