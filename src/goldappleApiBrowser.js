@@ -203,11 +203,11 @@ async function getBrowser() {
 }
 
 /**
- * Fetches product count from GoldApple catalog page by parsing DOM
+ * Fetches product count from GoldApple catalog page by parsing DOM (single attempt)
  * @param {string} categoryUrl - Category URL (e.g., 'https://goldapple.ru/brands/flacon-magazine')
  * @returns {Promise<Object>} Product data with count
  */
-export async function fetchProductCountFromPage(categoryUrl) {
+async function fetchProductCountFromPageSingleAttempt(categoryUrl) {
   const browserInstance = await getBrowser();
   const page = await browserInstance.newPage();
 
@@ -303,6 +303,57 @@ export async function fetchProductCountFromPage(categoryUrl) {
     console.error('Error fetching product count from page:', error);
     throw error;
   }
+}
+
+/**
+ * Fetches product count from GoldApple catalog page with retry logic
+ * Retries if count is 0 or invalid
+ * @param {string} categoryUrl - Category URL (e.g., 'https://goldapple.ru/brands/flacon-magazine')
+ * @param {number} maxRetries - Maximum number of retries (default: 3)
+ * @returns {Promise<Object>} Product data with count
+ */
+export async function fetchProductCountFromPage(categoryUrl, maxRetries = 3) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[Attempt ${attempt}/${maxRetries}] Fetching product count...`);
+
+      const result = await fetchProductCountFromPageSingleAttempt(categoryUrl);
+      const productCount = result.data.productCount;
+
+      // Check if we got a valid count (not 0 and not NaN)
+      if (productCount > 0 && !isNaN(productCount)) {
+        console.log(`✅ Successfully got product count: ${productCount}`);
+        return result;
+      }
+
+      // If count is 0 or NaN, retry
+      console.warn(`⚠️ Got invalid product count: ${productCount}, retrying...`);
+      lastError = new Error(`Invalid product count received: ${productCount}`);
+
+      // Wait before retry (exponential backoff)
+      if (attempt < maxRetries) {
+        const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // 1s, 2s, 4s, max 10s
+        console.log(`Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    } catch (error) {
+      console.error(`❌ Attempt ${attempt} failed:`, error.message);
+      lastError = error;
+
+      // Wait before retry
+      if (attempt < maxRetries) {
+        const waitTime = Math.min(2000 * Math.pow(2, attempt - 1), 15000); // 2s, 4s, 8s, max 15s
+        console.log(`Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+  }
+
+  // All retries failed
+  console.error(`❌ All ${maxRetries} attempts failed`);
+  throw lastError || new Error('Failed to fetch product count after all retries');
 }
 
 /**

@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  goldapple-bot:
+    build: .
+    container_name: goldapple-tracker-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - NODE_ENV=production
+    volumes:
+      # Сохраняем данные бота (подписки и история)
+      - ./data:/app/data
+      - ./storage:/app/storage
+    # Ограничиваем ресурсы контейнера
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    # Логирование
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
