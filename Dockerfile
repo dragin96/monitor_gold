@@ -17,11 +17,10 @@ RUN npm ci --only=production
 # Копируем исходный код
 COPY . .
 
-# Создаём директории для данных
-RUN mkdir -p /app/data /app/storage
-
-# Даём права на запись для пользователя pptruser
-RUN chown -R pptruser:pptruser /app
+# Создаём директории для данных с правильными правами
+RUN mkdir -p /app/data /app/storage && \
+    chown -R pptruser:pptruser /app && \
+    chmod -R 755 /app/data /app/storage
 
 # Переключаемся обратно на непривилегированного пользователя
 USER pptruser

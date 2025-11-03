@@ -8,8 +8,9 @@ services:
       - NODE_ENV=production
     volumes:
       # Сохраняем данные бота (подписки и история)
-      - ./data:/app/data
-      - ./storage:/app/storage
+      # Используем named volumes для правильных прав доступа
+      - goldapple-data:/app/data
+      - goldapple-storage:/app/storage
     # Ограничиваем память контейнера
     mem_limit: 2g
     mem_reservation: 512m
@@ -19,3 +20,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  goldapple-data:
+    driver: local
+  goldapple-storage:
+    driver: local
